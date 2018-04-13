@@ -1,0 +1,8 @@
+[package]
+name = "runner"
+version = "0.1.0"
+authors = ["museun <museun@outlook.com>"]
+
+[dependencies]
+log = "0.4.1"
+basiclogger = { git = "https://museun@bitbucket.org/museun/basiclogger.git", branch = "master", version = "0.0.1"}
