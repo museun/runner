@@ -1,16 +1,25 @@
 [[package]]
-name = "basiclogger"
-version = "0.0.1"
-source = "git+https://museun@bitbucket.org/museun/basiclogger.git#861b289b66b2e7410f30dfe2bb367e13aeb604b9"
+name = "cfg-if"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "chrono"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-integer 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.39 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
-name = "cfg-if"
-version = "0.1.2"
+name = "fern"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "libc"
@@ -26,15 +35,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-integer"
+version = "0.1.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "num-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "redox_syscall"
 version = "0.1.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "runner"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
- "basiclogger 0.0.1 (git+https://museun@bitbucket.org/museun/basiclogger.git)",
+ "chrono 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fern 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -68,10 +91,13 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
-"checksum basiclogger 0.0.1 (git+https://museun@bitbucket.org/museun/basiclogger.git)" = "<none>"
 "checksum cfg-if 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d4c819a1287eb618df47cc647173c5c4c66ba19d888a6e50d605672aed3140de"
+"checksum chrono 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1cce36c92cb605414e9b824f866f5babe0a0368e39ea07393b9b63cf3844c0e6"
+"checksum fern 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)" = "de237898aa785d93b869e965132f62a525b90cce5c0bf2a395f03e62e085bc5c"
 "checksum libc 0.2.40 (registry+https://github.com/rust-lang/crates.io-index)" = "6fd41f331ac7c5b8ac259b8bf82c75c0fb2e469bbf37d2becbba9a6a2221965b"
 "checksum log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "89f010e843f2b1a31dbd316b3b8d443758bc634bed37aabade59c686d644e0a2"
+"checksum num-integer 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "f8d26da319fb45674985c78f1d1caf99aa4941f785d384a2ae36d0740bc3e2fe"
+"checksum num-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dee092fcdf725aee04dd7da1d21debff559237d49ef1cb3e69bcb8ece44c7364"
 "checksum redox_syscall 0.1.37 (registry+https://github.com/rust-lang/crates.io-index)" = "0d92eecebad22b767915e4d529f89f28ee96dbbf5a4810d2b844373f136417fd"
 "checksum time 0.1.39 (registry+https://github.com/rust-lang/crates.io-index)" = "a15375f1df02096fb3317256ce2cee6a1f42fc84ea5ad5fc8c421cfe40c73098"
 "checksum winapi 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "04e3bd221fcbe8a271359c04f21a76db7d0c6028862d1bb5512d85e1e2eb5bb3"

@@ -1,18 +1,16 @@
-extern crate basiclogger;
+extern crate chrono;
+extern crate fern;
 extern crate log;
+#[allow(unused_imports)]
 use log::*;
 
 use std::env;
-use std::time::Duration;
-use std::thread;
-use std::process::{self, Command, Stdio};
-use std::net::{TcpListener, TcpStream};
 use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::process::{self, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
-
-// static ADDRESS: &'static str = "127.0.0.1";
-// static PORT: u16 = 54564;
-// static PROCESS: &'static str = "foo.exe";
+use std::thread;
+use std::time::Duration;
 
 struct Inner {
     delay: Duration,
@@ -22,18 +20,18 @@ struct Inner {
 
 struct Runner {
     inner: Arc<Mutex<Inner>>,
-    conf: Arc<Config>,
+    prog: String,
 }
 
 impl Runner {
-    pub fn new(conf: &Arc<Config>) -> Self {
+    pub fn new(prog: &str) -> Self {
         Self {
             inner: Arc::new(Mutex::new(Inner {
                 delay: Duration::from_secs(15),
                 running: Arc::new((Mutex::new(false), Condvar::new())),
                 pid: None,
             })),
-            conf: Arc::clone(conf),
+            prog: prog.into(), // program to run.
         }
     }
 
@@ -43,7 +41,7 @@ impl Runner {
         match Command::new("taskkill")
             .stdout(Stdio::null())
             .arg("/pid")
-            .arg(format!("{}", pid))
+            .arg(pid.to_string())
             .arg("/f")
             .status()
         {
@@ -69,7 +67,7 @@ impl Runner {
         cv.notify_one();
     }
 
-    pub fn delay(&self, parts: Vec<&str>) {
+    pub fn delay(&self, parts: &[&str]) {
         let delay = match parts.get(1) {
             Some(param) => param.parse::<u64>().unwrap(),
             None => 15,
@@ -88,7 +86,6 @@ impl Runner {
             let inner = &*inner.lock().unwrap();
             inner.pid.unwrap()
         };
-
         Runner::kill(pid);
     }
 
@@ -99,7 +96,6 @@ impl Runner {
             let inner = &*inner.lock().unwrap();
             inner.pid.unwrap()
         };
-
         self.toggle(false);
         Runner::kill(pid);
     }
@@ -109,30 +105,33 @@ impl Runner {
         self.toggle(true);
     }
 
-    pub fn handle(&self, cmd: String) {
+    pub fn handle(&self, cmd: &str) {
         let parts = cmd.split_whitespace().map(|s| s.trim()).collect::<Vec<_>>();
         match parts.get(0) {
             Some(&"STOP") => self.stop(),
             Some(&"START") => self.start(),
             Some(&"RESTART") => self.restart(),
-            Some(&"DELAY") => self.delay(parts),
+            Some(&"DELAY") => self.delay(&parts),
             None => error!("invalid data"),
             _ => warn!("unknown command: '{}'", cmd),
         }
     }
 
     pub fn accept_connections(&self, socket: &TcpListener) {
+        fn try_read<R: ::std::io::Read>(reader: R) -> Option<String> {
+            let mut reader = BufReader::new(reader);
+            let mut buf = vec![];
+            reader.read_until(b'\0', &mut buf).ok()?;
+            buf.pop(); // remove the NUL
+            String::from_utf8(buf).ok()
+        }
+
         for stream in socket.incoming() {
             match stream {
-                Ok(stream) => {
-                    let mut reader = BufReader::new(stream);
-                    let mut buf = vec![];
-                    reader
-                        .read_until(b'\0', &mut buf)
-                        .expect("couldn't read command");
-                    buf.pop();
-                    self.handle(String::from_utf8(buf).expect("couldn't parse response as string"));
-                }
+                Ok(stream) => match try_read(stream) {
+                    Some(data) => self.handle(&data),
+                    _ => error!("couldn't read data from stream"),
+                },
                 Err(err) => {
                     error!("failed to accept conn: {}", err);
                 }
@@ -141,18 +140,23 @@ impl Runner {
     }
 
     pub fn run_loop(&self) {
-        use std::fs;
+        let file = match ::std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .write(true)
+            .open(format!("{}.log", self.prog))
+        {
+            Ok(file) => file,
+            Err(err) => {
+                error!("cannot open log file: {}", err);
+                process::exit(1);
+            }
+        };
 
         self.toggle(true);
         loop {
-            let file = fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .write(true)
-                .open("noye.log")
-                .expect("should be able to create log file");
-
-            match Command::new(&self.conf.process).stdout(file).spawn() {
+            let file = file.try_clone().expect("required cloning of the log file");
+            match Command::new(&self.prog).stdout(file).spawn() {
                 Ok(mut child) => {
                     let pid = {
                         let pid = child.id();
@@ -163,8 +167,8 @@ impl Runner {
                     };
                     info!("starting with pid: {}", pid);
                     match child.wait() {
-                        Ok(status) => info!("{} exited: {}", self.conf.process, status),
-                        Err(err) => warn!("could not start {}: {}", self.conf.process, err),
+                        Ok(status) => info!("{} exited: {}", self.prog, status),
+                        Err(err) => warn!("could not start {}: {}", self.prog, err),
                     }
                 }
                 Err(err) => warn!("could not start child process: {}", err),
@@ -200,48 +204,31 @@ static COMMANDS: [&'static str; 4] = [
     "DELAY <secs>  <- sets respawn duration to 'secs'",
 ];
 
-#[derive(Debug)]
-struct Config {
-    process: String,
-    address: String,
-    port: u16,
-}
-
-impl Config {
-    pub fn new() -> Self {
-        let get_or = |s, d| env::var(s).unwrap_or(d);
-
-        Self {
-            process: get_or("RUNNER_PROCESS", "noye.exe".into()),
-            address: get_or("RUNNER_ADDRESS", "127.0.0.1".into()),
-            port: get_or("RUNNER_PORT", "54145".into())
-                .parse::<u16>()
-                .unwrap(),
-        }
-    }
-}
-
 fn main() {
-    use basiclogger::*;
-    let _ = MultiLogger::init(
-        vec![
-            // TODO fix file logging
-            Box::new(StdoutLogger::new()), // log to console
-        ],
-        Level::Trace,
-    );
+    if let Err(err) = init_logger() {
+        eprintln!("error! cannot start logger: {}", err);
+        ::std::process::exit(1)
+    }
 
-    let args = env::args()
-        .map(|ref b| b.to_uppercase())
-        .collect::<Vec<_>>();
+    let prog = env::var("RUNNER_PROCESS").unwrap_or_else(|_| "noye.exe".into());
+    let addr = env::var("RUNNER_ADDRESS").unwrap_or_else(|_| "127.0.0.1".into());
+    let port = match env::var("RUNNER_PORT")
+        .unwrap_or_else(|_| "54145".into())
+        .parse::<u16>()
+    {
+        Ok(port) => port,
+        Err(err) => {
+            error!("couldn't parse the port. check RUNNER_PORT: {}", err);
+            process::exit(1)
+        }
+    };
 
-    let conf = Arc::new(Config::new());
-    let runner = Arc::new(Runner::new(&conf));
-    match create_lock(&conf.address, conf.port) {
+    match TcpListener::bind((addr.as_str(), port)).ok() {
         Some(socket) => {
+            let runner = Arc::new(Runner::new(&prog));
             {
                 let runner = Arc::clone(&runner);
-                info!("listening on {}:{}", conf.address, conf.port);
+                info!("listening on {}:{}", addr, port);
                 thread::spawn(move || loop {
                     runner.accept_connections(&socket);
                 });
@@ -252,6 +239,10 @@ fn main() {
             }
         }
         None => {
+            let args = env::args()
+                .map(|ref b| b.to_uppercase())
+                .collect::<Vec<_>>();
+
             if args.len() < 2 {
                 println!("available commands:");
                 for key in COMMANDS.iter().map(|s| s.to_lowercase()) {
@@ -259,23 +250,35 @@ fn main() {
                 }
                 process::exit(-1);
             }
-            send(&args[1..].join(" "), &conf.address, conf.port);
+
+            if let Ok(mut client) = TcpStream::connect((addr.as_str(), port)) {
+                let data = &args[1..].join(" ");
+                if let Err(err) = client.write_fmt(format_args!("{}\0", data)) {
+                    error!("couldn't send data: '{}' --> {}", data, err);
+                    process::exit(-1);
+                }
+            } else {
+                error!("couldn't connect to server at {}:{}", addr, port);
+                process::exit(-1);
+            }
         }
     }
 }
 
-fn create_lock(addr: &str, port: u16) -> Option<TcpListener> {
-    match TcpListener::bind((addr, port)) {
-        Ok(socket) => Some(socket),
-        Err(_) => None,
-    }
-}
-
-fn send(data: &str, addr: &str, port: u16) {
-    let data = format!("{}\0", data);
-    let mut client = TcpStream::connect((addr, port))
-        .expect(&format!("couldn't connect to server at {}:{}", addr, port,));
-    client
-        .write_all(data.as_bytes())
-        .expect(&format!("couldn't send data: '{}'", data));
+fn init_logger() -> Result<(), fern::InitError> {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{}] {} ({}): {}",
+                chrono::Local::now().format("%F %T%.3f"),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Info)
+        .chain(std::io::stdout())
+        .chain(fern::log_file("runner.log")?)
+        .apply()?;
+    Ok(())
 }
