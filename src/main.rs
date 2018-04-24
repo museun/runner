@@ -1,3 +1,5 @@
+extern crate noye_kill;
+
 extern crate chrono;
 extern crate fern;
 extern crate log;
@@ -7,7 +9,7 @@ use log::*;
 use std::env;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::process::{self, Command, Stdio};
+use std::process::{self, Command};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -37,21 +39,8 @@ impl Runner {
 
     pub fn kill(pid: u32) {
         debug!("trying to kill: {}", pid);
-
-        match Command::new("taskkill")
-            .stdout(Stdio::null())
-            .arg("/pid")
-            .arg(pid.to_string())
-            .arg("/f")
-            .status()
-        {
-            Ok(status) => {
-                debug!("killed: {} ({})", pid, status);
-            }
-            Err(err) => {
-                warn!("couldn't kill: pid {}. {}", pid, err);
-            }
-        }
+        noye_kill::kill_process(pid);
+        debug!("killed process");
     }
 
     pub fn toggle(&self, status: bool) {
@@ -140,10 +129,14 @@ impl Runner {
     }
 
     pub fn run_loop(&self) {
+        use std::os::windows::process::CommandExt;
+
         self.toggle(true);
         loop {
+            trace!("spawning command");
             match Command::new(&self.prog)
                 .stdout(process::Stdio::null())
+                .creation_flags(0x00000200) // CREATE_NEW_PROCESS_GROUP
                 .spawn()
             {
                 Ok(mut child) => {
@@ -154,6 +147,7 @@ impl Runner {
                         inner.pid = Some(pid);
                         pid
                     };
+
                     info!("starting with pid: {}", pid);
                     match child.wait() {
                         Ok(status) => info!("{} exited: {}", self.prog, status),
@@ -182,6 +176,8 @@ impl Runner {
             while !*running {
                 running = cv.wait(running).unwrap();
             }
+
+            trace!("next loop");
         }
     }
 }
@@ -196,7 +192,7 @@ static COMMANDS: [&'static str; 4] = [
 fn main() {
     if let Err(err) = init_logger() {
         eprintln!("error! cannot start logger: {}", err);
-        ::std::process::exit(1)
+        process::exit(1)
     }
 
     let prog = env::var("RUNNER_PROCESS").unwrap_or_else(|_| "noye.exe".into());
@@ -212,6 +208,8 @@ fn main() {
         }
     };
 
+    trace!("before listener");
+
     match TcpListener::bind((addr.as_str(), port)).ok() {
         Some(socket) => {
             let runner = Arc::new(Runner::new(&prog));
@@ -224,7 +222,8 @@ fn main() {
             }
             {
                 let runner = Arc::clone(&runner);
-                runner.run_loop()
+                runner.run_loop();
+                trace!("after run loop");
             }
         }
         None => {
@@ -252,6 +251,8 @@ fn main() {
             }
         }
     }
+
+    trace!("end of main");
 }
 
 fn init_logger() -> Result<(), fern::InitError> {

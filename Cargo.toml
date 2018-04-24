@@ -7,3 +7,9 @@ authors = ["museun <museun@outlook.com>"]
 log = "0.4.1"
 fern = "0.5.5" 
 chrono = "0.4.2" 
+
+noye_kill = { git = "https://bitbucket.org/museun/noye_kill/src", version = "0.1.0", branch = "dev" }
+
+[profile.release]
+opt-level = "s"
+lto = true
