@@ -73,7 +73,7 @@ impl Runner {
             None => 15,
         };
 
-        info!("!! got a delay command, setting delay: {}s", delay);
+        info!("!! got a delay command, setting delay to {}s", delay);
         let inner = self.inner.clone();
         let inner = &mut *inner.lock().unwrap();
         inner.delay = Duration::from_secs(delay);
@@ -140,23 +140,12 @@ impl Runner {
     }
 
     pub fn run_loop(&self) {
-        let file = match ::std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .write(true)
-            .open(format!("{}.log", self.prog))
-        {
-            Ok(file) => file,
-            Err(err) => {
-                error!("cannot open log file: {}", err);
-                process::exit(1);
-            }
-        };
-
         self.toggle(true);
         loop {
-            let file = file.try_clone().expect("required cloning of the log file");
-            match Command::new(&self.prog).stdout(file).spawn() {
+            match Command::new(&self.prog)
+                .stdout(process::Stdio::null())
+                .spawn()
+            {
                 Ok(mut child) => {
                     let pid = {
                         let pid = child.id();
@@ -180,7 +169,7 @@ impl Runner {
                 inner.delay
             };
 
-            info!("?? waiting delay: {}", delay.as_secs());
+            info!("?? waiting for {} to respawn", delay.as_secs());
             thread::sleep(delay);
 
             let pair = {
@@ -269,10 +258,9 @@ fn init_logger() -> Result<(), fern::InitError> {
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
-                "[{}] {} ({}): {}",
-                chrono::Local::now().format("%F %T%.3f"),
+                "[{}] {}: {}",
                 record.level(),
-                record.target(),
+                chrono::Local::now().format("%T%.3f"),
                 message
             ))
         })
