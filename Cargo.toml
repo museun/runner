@@ -1,14 +1,13 @@
 [package]
 name = "runner"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["museun <museun@outlook.com>"]
 
 [dependencies]
-log = "0.4.1"
-fern = "0.5.5" 
-chrono = "0.4.2" 
-
-noye_kill = { git = "https://bitbucket.org/museun/noye_kill/src", version = "0.1.0", branch = "master" }
+log = "0.4"
+notify = { git = "https://github.com/museun/notify", version = "4.0.4", branch = "win-0.3" } 
+winapi = { version = "0.3", features = ["wincon", "consoleapi"] }
+env_logger = { version = "0.5", default-features = false }
 
 [profile.release]
 opt-level = "s"
